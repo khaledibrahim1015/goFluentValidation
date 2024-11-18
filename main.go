@@ -6,6 +6,7 @@ func main() {
 
 	// validator.ExampleOne()
 	// validator.ExampleTwo()
-	validator.ExampleThree()
+	// validator.ExampleThree()
+	validator.ExampleFour()
 
 }

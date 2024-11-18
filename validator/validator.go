@@ -29,6 +29,9 @@ type ValidationError struct {
 type (
 	// ValidationErrors holds multiple validation errors
 	ValidationErrors []ValidationError
+
+	// CustomValidatorFunc is a type for custom validation functions
+	CustomValidatorFunc func(field reflect.Value) error
 )
 
 func (ve ValidationErrors) Error() string {
@@ -43,13 +46,21 @@ func (ve ValidationErrors) Error() string {
 
 // Validator handles validation logic
 type Validator struct {
-	errors ValidationErrors
+	errors           ValidationErrors
+	customValidators map[string]CustomValidatorFunc
 }
 
 // New Create a new Validator instance
 
 func New() *Validator {
-	return &Validator{} // errors will be initialized to nil
+	return &Validator{
+		customValidators: make(map[string]CustomValidatorFunc),
+	}
+}
+
+// RegisterCustomValidator registers a custom validation function
+func (v *Validator) RegisterCustomValidator(tagVal string, fn CustomValidatorFunc) {
+	v.customValidators[tagVal] = fn
 }
 
 // Validate performs basic validation on the provided struct
@@ -72,6 +83,9 @@ func (v *Validator) Validate(s interface{}) error {
 
 	// validateFields validates individual fields of the struct
 	v.validateFields(structVal)
+
+	// Second pass: apply custom validators
+	v.applyCustomValidators(structVal)
 
 	if len(v.errors) > 0 {
 		return v.errors
@@ -138,7 +152,6 @@ func (v *Validator) applyValidationRule(rule string, currentFiledVal reflect.Val
 		if !v.isMatchedRegex(currentFiledVal.String(), ruleValue) {
 			return fmt.Errorf("value does not match required format")
 		}
-
 	}
 
 	return nil
@@ -193,16 +206,39 @@ func (v *Validator) isMatchedRegex(value, pattern string) bool {
 	return matched
 }
 
-func (v *Validator) isValidEmail(email string) bool {
-	pattern := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
-	matched, _ := regexp.MatchString(pattern, email)
-	return matched
+func (v *Validator) applyCustomValidators(structVal reflect.Value) {
 
-}
+	// get type
+	structType := structVal.Type()
 
-func (v *Validator) matchRegex(value, pattern string) bool {
-	matched, _ := regexp.MatchString(pattern, value)
-	return matched
+	for i := 0; i < structVal.NumField(); i++ {
+		currentField := structType.Field(i)
+		currentFieldVal := structVal.Field(i)
+
+		// Get validation rules from struct tag `validate:"required,min=2,max=50"`
+		tagVal := currentField.Tag.Get(validate)
+		if tagVal == "" {
+			continue
+		}
+
+		rules := strings.Split(tagVal, ",")
+
+		for _, rule := range rules {
+			// Check if this rule is a custom validator
+			if validator, ok := v.customValidators[rule]; ok {
+				// execute validator
+				if err := validator(currentFieldVal); err != nil {
+					v.errors = append(v.errors, ValidationError{
+						Field:   currentField.Name,
+						Message: err.Error(),
+					})
+				}
+			}
+
+		}
+
+	}
+
 }
 
 type User struct {
@@ -269,6 +305,56 @@ func ExampleThree() {
 		fmt.Println(err)
 	} else {
 		fmt.Println("passed")
+	}
+
+}
+
+func ExampleFour() {
+
+	type Test struct {
+		Username   string `validate:"required,valid_username"`   // Descriptive tag name
+		Department string `validate:"required,valid_department"` // Different validation
+		Email      string `validate:"required,email"`
+	}
+
+	v := New()
+	v.RegisterCustomValidator("valid_username", func(field reflect.Value) error {
+		usernameValue := field.String()
+		if !strings.Contains(usernameValue, "_") {
+			fmt.Errorf("username must contain underscore")
+		}
+		return nil
+	})
+
+	v.RegisterCustomValidator("valid_department", func(field reflect.Value) error {
+		deptValue := field.String()
+		if !strings.HasPrefix(deptValue, "DEP_") {
+			return fmt.Errorf("department must start with DEPT_")
+		}
+		return nil
+
+	})
+
+	// invalid
+	tst := Test{
+		Username:   "khaledibrahim", // invalid: missing underscore
+		Department: "tech",          // invalid: missing DEPT_ prefix
+		Email:      "khaled@mail",
+	}
+	if err := v.Validate(&tst); err != nil {
+		fmt.Println(err)
+	}
+
+	// valid
+	tst2 := Test{
+		Username:   "khaled_ibrahim", // invalid: missing underscore
+		Department: "DEP_tech",       // invalid: missing DEPT_ prefix
+		Email:      "khaled@gmail.com",
+	}
+	if err := v.Validate(&tst2); err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println("passed ")
 	}
 
 }
