@@ -3,16 +3,20 @@ package validator
 import (
 	"fmt"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 )
 
 const (
-	validate    = "validate"
-	required    = "required"
-	requiredMsg = "field is required"
-	min         = "min"
-	max         = "max"
+	validate          = "validate"
+	required          = "required"
+	requiredMsg       = "field is required"
+	min               = "min"
+	max               = "max"
+	email             = "email"
+	regex             = "regex"
+	emailRegexPattern = `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
 )
 
 // ValidationError represents a single validation error
@@ -71,7 +75,6 @@ func (v *Validator) Validate(s interface{}) error {
 
 	if len(v.errors) > 0 {
 		return v.errors
-
 	}
 
 	return nil
@@ -103,14 +106,6 @@ func (v *Validator) validateFields(structVal reflect.Value) {
 			}
 		}
 
-		// emptyStruct  := currentFieldVal.IsZero()
-		// if tagVal == required && currentFieldVal.IsZero() {
-		// 	v.errors = append(v.errors, ValidationError{
-		// 		Field:   currentField.Name,
-		// 		Message: requiredMsg,
-		// 	})
-		// }
-
 	}
 
 }
@@ -135,6 +130,15 @@ func (v *Validator) applyValidationRule(rule string, currentFiledVal reflect.Val
 		return v.validateMin(currentFiledVal, ruleValue)
 	case max:
 		return v.validateMax(currentFiledVal, ruleValue)
+	case email:
+		if !v.isMatchedRegex(currentFiledVal.String(), emailRegexPattern) {
+			return fmt.Errorf("invalid email format")
+		}
+	case regex:
+		if !v.isMatchedRegex(currentFiledVal.String(), ruleValue) {
+			return fmt.Errorf("value does not match required format")
+		}
+
 	}
 
 	return nil
@@ -183,6 +187,24 @@ func (v *Validator) validateMax(currentFieldVal reflect.Value, maxValue string) 
 
 }
 
+func (v *Validator) isMatchedRegex(value, pattern string) bool {
+
+	matched, _ := regexp.MatchString(pattern, value)
+	return matched
+}
+
+func (v *Validator) isValidEmail(email string) bool {
+	pattern := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
+	matched, _ := regexp.MatchString(pattern, email)
+	return matched
+
+}
+
+func (v *Validator) matchRegex(value, pattern string) bool {
+	matched, _ := regexp.MatchString(pattern, value)
+	return matched
+}
+
 type User struct {
 	Name  string `validate:"required"`
 	Email string `validate:"required"`
@@ -215,4 +237,38 @@ func ExampleTwo() {
 	if err := v.Validate(&user); err != nil {
 		fmt.Println(err)
 	}
+}
+
+func ExampleThree() {
+	type Khaled struct {
+		Name        string `validate:"required,min=2,max=50"`
+		Email       string `validate:"required,email"`
+		PhoneNumber string `validate:"required,regex=^01[0125][0-9]{8}$"`
+	}
+
+	v := New()
+
+	// invalid
+	user := Khaled{
+		Name:        "John",
+		Email:       "invalid-email", // invalid format
+		PhoneNumber: "123456789",     // invalid format
+	}
+
+	if err := v.Validate(&user); err != nil {
+		fmt.Println(err)
+	}
+
+	// valid
+	user2 := Khaled{
+		Name:        "khaled",
+		Email:       "khaled.ibrahem.ahmed.ali@gmail.com",
+		PhoneNumber: "01140849506",
+	}
+	if err := v.Validate(&user2); err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println("passed")
+	}
+
 }
