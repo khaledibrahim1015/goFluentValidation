@@ -19,7 +19,7 @@ A flexible and extensible validation package for Go structs that provides both b
 ## Installation
 
 ```bash
-go get github.com/yourusername/validator
+go get github.com/khaledibrahim1015/validator
 ```
 
 ## Features
@@ -243,10 +243,3 @@ func main() {
 5. Document custom validation rules clearly
 6. Use meaningful field names and error messages
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
