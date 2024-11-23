@@ -188,11 +188,11 @@ func (v *Validator) validateMax(currentFieldVal reflect.Value, maxValue string) 
 	switch currentFieldVal.Kind() {
 	case reflect.String:
 		if len(currentFieldVal.String()) > max {
-			return fmt.Errorf("length must be at least %d", min)
+			return fmt.Errorf("length must be at most %d", max)
 		}
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		if currentFieldVal.Int() > int64(max) {
-			return fmt.Errorf("value must be at least %d", min)
+			return fmt.Errorf("length must be at most %d", max)
 		}
 
 	}
